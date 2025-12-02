@@ -1,0 +1,29 @@
+{
+    "id": "6D7F3312",
+    "path": "D:/Github_Repository/GAM-DiD/GAM_DiD_share/script/00C_main script.R",
+    "project_path": "script/00C_main script.R",
+    "type": "r_source",
+    "hash": "3366290941",
+    "contents": "",
+    "dirty": false,
+    "created": 1764621490643.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "61,44",
+        "scrollLine": "53",
+        "docOutlineVisible": "0",
+        "docOutlineSize": "225"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1764690325,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1764690325577,
+    "read_only": false,
+    "read_only_alternatives": []
+}

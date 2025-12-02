@@ -1,0 +1,196 @@
+# This is a script to post analysis the data after glm models
+
+library(ggplot2)
+library(ggpmisc) # Needed for equation display
+library(robustbase)
+
+cfs2ls  <- 28.3168
+m3s2cfs <- 35.31467
+
+# Define unit of flux calculation
+# [Alk] ueql -> t CO2 / km2 / yr
+
+uni_flux <- 1/1e6*44   # ueql -> g/L
+
+# [Ca] ppm -> t / km2/ yr
+uni_flux <- 1/1000   # ppm -> g/L
+
+#### 1. Relationship between delta_c before and after basalt and discharge #### 
+
+
+# Combine data_did and eList W2 data for later analysis
+
+data_obs_eList <- data_w2_all %>%
+  left_join(eList_w2$Daily, by= "Date")
+
+
+data_treatment =  subset(data_did, Group == 1)
+data_treatment$predicted_c_target_fake <- data_treatment$predicted_c_target_fake_gam
+data_treatment$predicted_c_target <- data_treatment$predicted_c_target_gam
+
+
+data_treatment$delta_c_obs   <- data_treatment$c_target - data_treatment$predicted_c_target_fake
+data_treatment$delta_c_est   <- data_treatment$predicted_c_target - data_treatment$predicted_c_target_fake
+data_obs_eList$delta_c_elist <-  data_obs_eList$c_target - data_obs_eList$ConcDay
+
+data_treatment$delta_c_obspp   <- (data_treatment$c_target - data_treatment$predicted_c_target_fake)/data_treatment$predicted_c_target_fake
+data_treatment$delta_c_estpp  <- (data_treatment$predicted_c_target - data_treatment$predicted_c_target_fake)/data_treatment$predicted_c_target_fake
+data_obs_eList$delta_c_elistpp <- (data_obs_eList$c_target - data_obs_eList$ConcDay)/data_obs_eList$ConcDay
+
+
+
+# Replace ONLY the lm_model line with this:
+lm_model <- lmrob(predicted_c_target ~ c_target, data = data_treatment)
+
+# Fit linear model or obs and est w2 concentrations
+lm_model <- lm(predicted_c_target ~ c_target, data = data_treatment)
+
+# Extract equation and R²
+eq <- sprintf("y = %.2fx + %.2f", 
+              coef(lm_model)[2], coef(lm_model)[1])
+r2 <- sprintf("R² = %.3f", summary(lm_model)$r.squared)
+
+# Predicted c_target and observed c_target regression line
+ggplot(data_treatment, aes(x = c_target, y = predicted_c_target)) +
+  geom_point(aes(color = "Observed"), size = 1) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue", formula = y ~ x) +
+  stat_poly_eq(
+    formula = y ~ x,
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    parse = TRUE,
+    label.x = "right",
+    label.y = "top"
+  ) +
+  scale_color_manual(values = c("Observed" = "black")) +
+  labs(x = "c_target", y = "predicted_c_target", color = "") +
+  theme_minimal()
+
+
+#### Increase of Concentration after Basalt Application with Time #### 
+
+ggplot() + 
+  geom_point(data = data_treatment, 
+             aes(x = Date, y = delta_c_obs, color = "Observed"), size = 1) +
+  geom_point(data = data_treatment, 
+             aes(x = Date, y = delta_c_est, color = "Estimated"), size = 1) +
+  geom_point(data = data_obs_eList, 
+             aes(x = Date, y = delta_c_elist, color = "eList"), size = 1) +
+  scale_color_manual(values = c("Observed" = "blue", "Estimated" = "red", "eList" = "orange")) +
+  labs(title = "Increase of Concentration after Basalt Application", 
+       x = "Date", 
+       y = expression(Delta * "c (µeq/L)"),
+       color = "Legend") +
+  scale_x_date(
+    date_breaks = "3 month",
+    date_labels = "%m/%Y"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+
+
+
+#### Discharge and increase of conentration relationship ###
+ggplot() + 
+  geom_point(data = data_treatment, 
+             aes(x = Discharge, y = delta_c_obs, color = "Observed"), size = 1) +
+  geom_point(data = data_treatment, 
+             aes(x = Discharge, y = delta_c_est, color = "Estimated"), size = 1) +
+  scale_color_manual(values = c("Observed" = "blue", "Estimated" = "red")) +
+  labs(title = "Increase of Concentration after Basalt Application", 
+       x = "Discharge", 
+       #    y = expression(Delta * "c (µeq/L)"),       
+       y = expression(Delta * "c (µeq/L)"),
+       color = "Legend") +
+  theme_minimal()
+
+
+ggplot() + 
+  geom_point(data = data_treatment, 
+             aes(x = Discharge, y = c_target, color = "Observed"), size = 1) +
+  geom_point(data = data_treatment, 
+             aes(x = Discharge, y = predicted_c_target, color = "Estimated"), size = 1) +
+  scale_color_manual(values = c("Observed" = "blue", "Estimated" = "red")) +
+  labs(title = "Increase of Concentration after Basalt Application", 
+       x = "Discharge", 
+       #    y = expression(Delta * "c (µeq/L)"),       
+       y = expression(Delta * "c (µeq/L)"),
+       color = "Legend") +
+  theme_minimal()
+
+#### Calculate the 3 month average of the flux ####
+# {1} Use the average c increase percentage calculate the yearly increase flux 
+# Extract daily concentration data and filter for the target period
+daily_data <- eList_w2$Daily %>%
+  select(Date, ConcDay, Q) %>%
+  filter(Date >= as.Date("2023-07-01") & Date <= as.Date("2024-12-30"))
+
+daily_data <- daily_data %>%
+  mutate(
+    Quarter = floor_date(Date, unit = "3 months")  # Group into 3-month periods into the variable Quarter
+  )
+
+quarterly_avg <- daily_data %>%
+  group_by(Quarter) %>%
+  summarise(
+    Avg_Conc = mean(ConcDay, na.rm = TRUE),  # Average daily concentration from eList
+    Avg_Q    = mean(Q, na.rm = TRUE),
+    N_Days = n()  # Optional: Check how many days contributed to each average
+  ) %>%
+  ungroup()
+
+
+# Increase fraction of concentration after basalt concentration using the measured data and glm model data
+delta_c_ave <- data_treatment %>%
+  group_by(prepost.3monthlag) %>%
+  summarise(delta_c_estpp = mean(delta_c_estpp, na.rm = TRUE))
+
+df_flux                <- quarterly_avg
+df_flux$delta_C_pp     <- delta_c_ave$delta_c_estpp[-1]
+
+df_flux <- df_flux %>%
+  mutate(flux = Avg_Conc*delta_C_pp*N_Days*Avg_Q*m3s2cfs)
+
+flux_yearly <- sum(df_flux$flux)/sum(df_flux$N_Days)*365*cfs2ls*86400* uni_flux/1000000/0.13 # t CO2/year/km2
+flux_yearly
+
+
+
+#### Calculate flux export based on estimated daily data from 2023/07/01 to 2024/12/31 ####
+
+start_date <- as.Date("2023-07-01")
+end_date   <- as.Date("2024-11-30") # last date for Alk
+end_date   <- as.Date("2024-10-03") # last date for Ca
+
+# Calculate the elist flux over time
+
+data_eList_gam <- eList_w2$Daily %>%
+  left_join(new_data_daily_did,by = "Date") %>%
+  filter(Date >= start_date & Date <= end_date) %>%
+  filter(Group == "1")
+
+  
+data_eList_gam$eList_flux <- data_eList_gam$Q * data_eList_gam$ConcDay * m3s2cfs * cfs2ls * 86400 * uni_flux/1e6/0.13  # t CO2(or elements) /km2
+
+data_eList_gam$gam_flux   <- data_eList_gam$Q * data_eList_gam$predicted_c_target * m3s2cfs * cfs2ls * 86400 * uni_flux/ 1e6 /0.13  # t CO2(or elements)  /km2
+
+
+flux_yearly_eList <- sum(data_eList_gam$eList_flux)
+flux_yearly_gam <- sum(data_eList_gam$gam_flux)
+delta_flux <- (flux_yearly_gam - flux_yearly_eList)/as.numeric(end_date - start_date)*365
+delta_flux
+
+ggplot() + 
+  geom_point (data = data_eList_gam, aes(x = Date, y = eList_flux), color = "black", size = 1) +
+  geom_point (data = data_eList_gam, aes(x = Date, y = gam_flux), color = "red", size = 1) 
+
+
+  
+
+
+
+
+

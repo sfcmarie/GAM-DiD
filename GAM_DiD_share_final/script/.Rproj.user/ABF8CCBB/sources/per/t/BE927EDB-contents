@@ -1,0 +1,103 @@
+library(EGRET)
+library(EGRETci)
+library(ggplot2)
+library(mgcv) # for gam model
+library(dplyr)
+library(splines)
+library(effects)
+library(plotly)
+library(tidyr)
+library(zoo)
+library(dlnm)
+library(lubridate)
+library(effects)
+library(gratia)
+
+
+############################# Data Input from WRTDS ############################
+
+Daily <- readUserDaily("D:/EGRET/W2_analysis/Data_Input", "egret_daily_1992-2024.csv")
+
+# Load W2 WRTDS data 
+# relatively old run data
+
+# [Ca]
+load("D:/EGRET/W2_analysis/Data_Output/Data_Ca.RData")
+load("D:/EGRET/W2_analysis/Data_Output/eList_Ca_w2.RData")
+# relatively new run data with only eList_Ca
+load("D:/EGRET/W2_analysis/Data_Output/eList_Ca_250418.RData")
+
+# [Alk]
+load("D:/EGRET/W2_analysis/Data_Output/eListCI_Alk_w2_250418.RData") # with eList and dailyPcts_w2
+load("D:/EGRET/W2_analysis/Data_Output/eListonly_Alk_w2_250421.RData") # with eList and dailyPcts_w2
+
+# Load W9 WRTDS data 
+load("D:/EGRET/W9_analysis/EGRET/Data_Output/eList_Ca_w9.RData")
+
+loaddata <- load("D:/EGRET/W9_analysis/EGRET/Data_Output/eListCI_w9_Alk_250416.RData")
+
+
+# Load W2 WRTDS-CI data
+#load("D:/EGRET/W2_analysis/Data_Input/Data_Ca.RData") # when dailyPcts_w2 is loaded in the previous step, dont run this
+
+W9_Ca_daily <- eList_Ca_w9$Daily[, c("Date", "ConcDay")]
+
+
+############################# Load Water Chemistry Data ########################
+
+# W2 water chemistry data 
+data_w2_2324       <- read.csv("D:/EGRET/W2_analysis/Data_Input/data_w2_2325.csv")
+data_w2_2324$Dates <- as.Date(data_w2_2324$Dates, format = "%Y-%m-%d")
+data_w2_all        <- read.csv("D:/Work_Yale/R_Projects/GLM_ERW/data_input/W2_data_d_combined_250421.csv")
+# data_w2_all$Date   <- as.Date(data_w2_all$Date,"%m/%d/%Y" )
+data_w2_all$Date   <- as.Date(data_w2_all$Date,"%Y-%m-%d" )
+head(data_w2_all)
+
+# W9 water chemistry data
+
+data_w9_measured <- read.csv("D:/Work_Yale/Projects/W-2_Watershed/Data/W9_Data/W9_Chemistry_2024/Data_Output/W9_alkalinity_daily_1991-2024.csv")
+data_w9_measured$Date <- as.Date(data_w9_measured$Date,"%m/%d/%Y" )
+
+############################# Load Discharge  ##################################
+
+q_daily_w9         <- read.csv("D:/EGRET/W9_analysis/EGRET/Data_Input/egret_daily_1991-2024.csv")
+q_daily_w9$Date    <- as.Date(q_daily_w9$date,"%m/%d/%Y" )
+
+############################# Load Climate data ################################
+
+# PRISM Data Input, with SI unit
+prism_daily <- read.csv("D:/Work_Yale/R_Projects/GLM_ERW/data_input/PRISM_241231_SI.csv") # changed from PRSIM to this one
+prism_daily$Date <-as.Date(prism_daily$Date,"%m/%d/%Y" )
+
+# NTN data input, with weekly data
+NTN <- read.csv("D:/Work_Yale/R_Projects/GLM_ERW/data_input/NTN-vt99-w-s-mg_250418.csv")
+
+# Convert dateon and dateoff in NTN to Date objects
+NTN$dateOn <-as.Date(NTN$dateOn,"%m/%d/%Y" )
+NTN$dateOff <-as.Date(NTN$dateOff,"%m/%d/%Y" )
+
+# Due with the -9 in NTN
+# Function to replace -9 with the nearest non -9 value
+library(zoo)
+
+replace_with_nearest <- function(x) {
+  # Temporarily replace -9 with NA
+  x[x == -9] <- NA
+  # Use linear approximation to fill NAs
+  x <- na.approx(x, na.rm = FALSE)
+  # Carry forward/backward any remaining NAs at ends
+  x <- na.locf(x, na.rm = FALSE)
+  x <- na.locf(x, fromLast = TRUE, na.rm = FALSE)
+  # If any NAs remain (empty vector), put back -9
+  x[is.na(x)] <- -9
+  return(x)
+}
+# Replace -9 with the nearest valid value for specific columns
+NTN_cleaned <- NTN
+NTN_cleaned[c("ph", "NO3", "Cl", "SO4")] <- lapply(NTN_cleaned[c("ph", "NO3", "Cl", "SO4")], replace_with_nearest)
+
+
+
+
+
+

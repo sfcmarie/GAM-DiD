@@ -1,0 +1,65 @@
+############################## Figures #########################################
+
+# Plot: Compare observed, WRTDS-predicted, glm-predicted-no-basalt, and glm-predicted-with-basalt
+data_did <- data_did_2224
+ggplot() +
+  geom_line  (data = eList_w2$Daily, aes(x = Date, y = ConcDay, color = "W2-WRTDS"), size = 0.5) +
+  geom_point (data = eList_w2$Sample, aes(x = Date, y = ConcAve, color = "W2-measured-prebasalt"), size = 0.5) +
+  geom_point (data = data_w2_2324, aes(x = Dates, y = c_target, color = "W2-measured-postbasalt"), size = 0.5) +
+  geom_line  (data = eList_w9$Daily, aes(x = Date, y = ConcDay * unifact, color = "W9-WRTDS"), size = 0.5) +
+ # geom_point (data = data_w9_measured, aes(x = Date, y = c_target * unifact, color = "W9-measured"), size = 0.5) +
+  geom_point (data = eList_w9$Sample, aes(x = Date, y = ConcAve * unifact, color = "W9-measured"), size = 0.5) +
+   geom_ribbon(data = dailyPcts_w9$conc, aes(x = Date, ymin = p2.5 * unifact, ymax = p97.5 * unifact), fill = "lightpink", alpha = 0.3) +
+  geom_ribbon(data = dailyPcts_w2$conc, aes(x = Date, ymin = p2.5, ymax = p97.5), fill = "lightblue", alpha = 0.3) +
+  geom_point (data = subset(data_did, Group == 1), aes(x = Date, y = predicted_c_target_fake_gam, color = "W2-glm-nobas"), size = 0.5) +
+  geom_point (data = subset(data_did, Group == 0), aes(x = Date, y = predicted_c_target_fake_gam, color = "W9-glm"), size = 0.5) +
+  geom_point (data = subset(data_did, Group == 1), aes(x = Date, y = predicted_c_target_gam, color = "W2-glm-basalt"), size = 0.5) +
+
+  scale_color_manual(values = c("W2-WRTDS" = "lightblue", 
+                                "W2-measured-prebasalt" = "green", 
+                                "W2-measured-postbasalt" = "green", 
+                                "W9-WRTDS" = "pink", 
+                                "W9-measured" = "red",
+                                "W2-glm-nobas" = "orange",
+                                "W9-glm"= "black",
+                                "W2-glm-basalt" = "purple"
+                                ), 
+                     name = " ") +
+  labs(title = " ", 
+       x = "Date", 
+       y = "c_target Concentration (mg/L)") +
+  scale_x_date(limits = as.Date(c("2022-01-01", NA)), date_labels = "%Y-%m", date_breaks = "3 months") +
+  geom_vline(xintercept = as.Date("2023-07-01"), linetype = "dashed", color = "black") +
+  geom_text(aes(x = as.Date("2023-07-01"), y = 80, label = "Treatment"), vjust = 2, hjust = -1) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+
+
+# Plot: Daily data : Compare observed, WRTDS-predicted, glm-predicted-no-basalt, and glm-predicted-with-basalt
+new_data_daily_did$predicted_c_target           <- exp(predict(gam_did_2224,newdata = new_data_daily_did, type = "response"))
+new_data_daily_did_fake$predicted_c_target_fake <- exp(predict(gam_did_2224,newdata = new_data_daily_did_fake, type = "response"))
+
+ggplot() +
+  geom_line  (data = eList_w2$Daily, aes(x = Date, y = ConcDay), color = "grey", size = 0.5) +
+  geom_line  (data = subset(new_data_daily_did, Group == 1),aes(x = Date, y = predicted_c_target), color = "blue",size = 0.5) +  # Predicted data as line
+  geom_line  (data = subset(new_data_daily_did_fake, Group == 1),aes(x = Date, y = predicted_c_target_fake), color = "lightblue",size = 0.5) +  # Predicted data as line
+  geom_point (data = data_w2_2324, aes(x = Dates, y = c_target), color = "black", size = 1) +
+  geom_point (data = eList_w2$Sample, aes(x = Date, y = ConcAve),color = "black",  size = 1) +
+  
+  geom_line  (data = eList_w9$Daily, aes(x = Date, y = ConcDay * unifact),color = "grey", size = 0.5) +
+  geom_line  (data = subset(new_data_daily_did, Group == 0),aes(x = Date, y = predicted_c_target), color = "red",size = 0.5) +  # Predicted data as line
+  geom_line  (data = subset(new_data_daily_did_fake, Group == 0),aes(x = Date, y = predicted_c_target_fake), color = "pink",size = 0.5) +  # Predicted data as line
+  #geom_point (data = data_w9_measured, aes(x = Date, y = c_target * unifact),color = "black", size = 1) +
+  geom_point (data = eList_w9$Sample, aes(x = Date, y = ConcAve * unifact, color = "W9-measured"), size = 0.5) +
+  
+  geom_ribbon(data = dailyPcts_w9$conc, aes(x = Date, ymin = p2.5 * unifact, ymax = p97.5 * unifact), fill = "lightpink", alpha = 0.3) +
+  geom_ribbon(data = dailyPcts_w2$conc, aes(x = Date, ymin = p2.5 * unifact, ymax = p97.5 * unifact), fill = "lightblue", alpha = 0.3) +
+  
+  scale_x_date(limits = as.Date(c("2022-05-01", NA)), date_labels = "%Y-%m", date_breaks = "3 months") +
+  
+  labs(x = "Days After Basalt", y = "c_target", 
+       title = "Measured vs Predicted c_target") +
+  theme_minimal()
+
+

@@ -1,0 +1,117 @@
+######################## Data Input to run the functions #######################
+# Change this session when change to different target element
+
+# Define unit factor
+# [Ca]
+unifact  <- 1/2000*40 #  unit transfer from W9 to W2 Ca from ueql to mg/L
+
+# Generalize eList data 
+eList_w2 <- eList_Ca_w2_b
+eList_w9 <- eList_Ca_w9
+
+# Pick the target element from W2 data for analysis
+data_w2_all$c_target  <- data_w2_all$Ca_ppm
+data_w2_2324$c_target <- data_w2_2324$Ca
+
+# CI data
+dailyPcts_w2 <- dailyPcts_w2
+
+# [Alk]
+
+unifact  <- 1#  unit transfer from W9 to W2 Ca
+
+# Generalize eList data 
+eList_w2 <- eList_Alk_w2
+eList_w9 <- eList_w9_Alk
+
+# Pick the target element from W2 data for analysis
+data_w2_all$c_target  <- data_w2_all$Alk
+data_w2_2324$c_target <- data_w2_2324$Alk
+
+# Pick the target element from W9 data for analysis
+data_w9_measured$c_target <- data_w9_measured$ANC_all
+
+# CI data
+dailyPcts_w2 <- dailyPcts_Alk_w2
+
+####################### Clean the data #########################################
+
+# Use function data_clean_for_did to prepare the data for the glm models
+data_input <- data_clean_for_did(eList_w2, eList_w9)
+
+# Data input for the analysis from the data_clean_for_did function
+data_did_2224           <- data_input$data_did
+new_data_2224           <- data_input$new_data
+data_did2               <- data_input$data_did2
+new_data_daily_did      <- data_input$new_data_daily_did
+new_data_daily_did_fake <- data_input$new_data_daily_did_fake
+data_did_eList          <- data_input$data_did_eList
+
+data_did_9224                <- data_input$data_did_9224
+new_data_9224                <- data_input$new_data_9224
+new_data_daily_did_9224      <- data_input$new_data_daily_did_9224
+new_data_daily_did_fake_9224 <- data_input$new_data_daily_did_fake_9224
+data_did_eList_9224          <- data_input$data_did_eList_9224
+
+# Set time interval for the DID
+data_did_2224$prepost.lag <- as.factor(data_did_2224$days_after_basalt0)
+data_did_2224$prepost.3monthlag <- as.factor(ceiling(data_did_2224$days_after_basalt0/90))
+
+new_data_2224$prepost.lag <- as.factor(new_data_2224$days_after_basalt0)
+new_data_2224$prepost.3monthlag <- as.factor(ceiling(new_data_2224$days_after_basalt0/90))
+
+
+### So far, the best model
+### [2]. model with 2022 - 2024 w2 and w9 data with log c and q 
+# Assume basalt has a linear impact on concentrations
+
+gam_did_2224 <- gam(logc ~ 
+                      s(logq) + 
+                     # s(ppt..mm.) + 
+                      s(tmean..degrees.C.) +
+                      #s(SO4)+  # not significant
+                      #s(NO3)+
+                      #s(ph)+
+                      #s(Month) +
+                      #s(date_num)+
+                      Group + 
+                      prepost.3monthlag + 
+                      Group:prepost.3monthlag,  # Interaction term for Difference-in-Differences
+                    data = data_did_2224)
+
+summary(gam_did_2224)
+
+AIC(gam_did_2224)
+
+plot(gam_did_2224, pages = 1, rug = TRUE, se = TRUE, shade = TRUE)
+
+# Use the GAM to predict the concentrations
+data_did_2224$predicted_c_target_gam     <- exp(predict(gam_did_2224, newdata = data_did_2224))
+data_did_2224$predicted_c_target_fake_gam <- exp(predict(gam_did_2224,newdata = new_data_2224, type = "response"))
+
+
+# Fit linear model or obs and est w2 concentrations
+lm_model <- lm(predicted_c_target_gam ~ c_target, data = data_did_2224)
+
+# Extract equation and R²
+eq <- sprintf("y = %.2fx + %.2f", 
+              coef(lm_model)[2], coef(lm_model)[1])
+r2 <- sprintf("R² = %.3f", summary(lm_model)$r.squared)
+
+print(r2)
+
+### Quality control checks: 
+
+gam.check(gam_did_2224)         # QQ plot, residuals vs fitted, k-index
+
+plot(gam_did_2224, pages = 1)   # Smooth term visualizations
+
+concurvity(gam_did_2224, full = TRUE)
+
+summary(gam_did_2224)$r.sq
+summary(gam_did_2224)$dev.expl
+
+cor(data_did_2224[, c("logq", "ppt..mm.", "tmean..degrees.C.")], use = "complete.obs")
+
+table(data_did_2224$Group, data_did_2224$prepost.3monthlag)
+

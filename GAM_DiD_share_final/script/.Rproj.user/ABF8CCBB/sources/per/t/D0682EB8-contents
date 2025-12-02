@@ -1,0 +1,355 @@
+data_clean_for_did <- function (eList_w2, eList_w9) {
+  
+  
+  ########################### Data Preparation ###################################
+  
+  # Transfer the W9 concentration unit to W2 concentration unit
+  eList_w9$Daily$ConcDay_ppm <- eList_w9$Daily$ConcDay*unifact;
+  
+  # Assign W9 daily concentration to W9_eList_conc_daily
+  W9_eList_conc_daily <- eList_w9$Daily[, c("Date", "ConcDay_ppm")] # Note: ppm not for alk
+  
+  
+  
+  # Perform a cross join and then filter (join with the W2 2022-2024 data)
+  NTN_join <- data_w2_all %>%
+    mutate(key = 1) %>%
+    left_join(NTN_cleaned %>% mutate(key = 1), by = "key") %>%
+    filter(Date > dateOn & Date <= dateOff) %>%
+    select(Date, SO4 = SO4, ph = ph, NO3 = NO3) %>%
+    distinct()
+  
+  
+  # Perform a cross join and then filter (join with the W2 1992-2023 data)
+  NTN_join2 <- eList_w2$Sample %>%
+    mutate(key = 1) %>%
+    left_join(NTN_cleaned %>% mutate(key = 1), by = "key") %>%
+    filter(Date > dateOn & Date <= dateOff) %>%
+    select(Date, SO4 = SO4, ph = ph, NO3 = NO3) %>%
+    distinct()
+  
+  # Perform a cross join and then filter (join with the W2 1992-2024 data)
+  NTN_9224 <- bind_rows(NTN_join, NTN_join2) %>%
+    distinct(Date, .keep_all = TRUE) %>%
+    arrange(Date)
+  
+  # Create a column named c_target to make the colume name identical
+  eList_w2$Sample$c_target <- eList_w2$Sample$ConcAve
+  
+  # Combine the target concentrations from 1992 to 2024, Keep only Date and c_target from both datasets
+  combined_simplified <- bind_rows(
+    eList_w2$Sample %>% select(Date, c_target),
+    data_w2_all %>% select(Date, c_target)
+  ) %>%
+    distinct()  # Remove duplicate rows (same Date & c_target)
+  
+  
+  data_combined_9224 <- combined_simplified %>%
+    left_join(NTN_9224,      by = "Date") %>%
+    left_join(prism_daily, by = "Date") %>%
+    left_join(W9_eList_conc_daily, by = "Date") %>%  # Limited data after Aug 2024
+    left_join(q_daily_w9,  by = "Date")  %>%
+    filter(!is.na(c_target))  # Exclude rows where c_target is NA
+  
+  
+  data_combined <- data_w2_all %>%
+    left_join(NTN_9224,      by = "Date") %>%
+    left_join(prism_daily, by = "Date") %>%
+    left_join(W9_eList_conc_daily, by = "Date") %>%  # Limited data after Aug 2024
+    left_join(q_daily_w9,  by = "Date")
+  
+  data_combined <- data_combined %>% 
+    filter(Date %in% data_w2_all$Date[!is.na(data_w2_all$Discharge)])  
+  
+  # With no NTN data due to lack of data 
+  data_combined2 <- data_w2_all %>%
+    left_join(prism_daily, by = "Date") %>%
+    left_join(W9_eList_conc_daily, by = "Date") %>%
+    left_join(q_daily_w9,  by = "Date")
+  
+  data_combined2 <- data_combined2 %>% 
+    filter(Date %in% data_w2_all$Date[!is.na(data_w2_all$Discharge)])  
+  
+  
+  data_combined$Basalt       <- ifelse(data_combined$Date >= as.Date("2023-07-01"), 1, 0)
+  data_combined2$Basalt      <- ifelse(data_combined2$Date >= as.Date("2023-07-01"), 1, 0)
+  data_combined_9224$Basalt  <- ifelse(data_combined_9224$Date >= as.Date("2023-07-01"), 1, 0)
+  
+  # Add a column to identify the group (1 = treatment, 0 = control)
+  data_combined$Group      <- ifelse(is.na(data_combined$ConcDay), 1, 0)
+  data_combined2$Group     <- ifelse(is.na(data_combined2$ConcDay), 1, 0)
+  data_combined_9224$Group <- ifelse(is.na(data_combined_9224$ConcDay), 1, 0)
+  
+  
+  # Create separate datasets for treatment and control
+  data_combined$conc_W9       <- data_combined$ConcDay_ppm
+  data_combined2$conc_W9      <- data_combined2$ConcDay_ppm
+  data_combined_9224$conc_W9  <- data_combined_9224$ConcDay_ppm
+  
+  data_combined_9224$Discharge <- data_combined_9224$Q
+  
+  
+  treatment_data <- data_combined %>% 
+    select(Date, c_target, Discharge, SO4, ph, NO3, ppt..mm., tmean..degrees.C., Basalt) %>%
+    mutate(Group = 1)  # Treatment group
+  
+  control_data <- data_combined %>% 
+    select(Date, c_target = conc_W9, Discharge = Qdaily, SO4, ph, NO3, ppt..mm., tmean..degrees.C., Basalt) %>%
+    mutate(Group = 0)  # Control group
+  
+
+  
+  treatment_data2 <- data_combined2 %>% 
+    select(Date, c_target, Discharge, ppt..mm., tmean..degrees.C., Basalt) %>%
+    mutate(Group = 1)  # Treatment group
+  
+  control_data2 <- data_combined2 %>% 
+    select(Date, c_target = conc_W9, Discharge = Qdaily, ppt..mm., tmean..degrees.C., Basalt) %>%
+    mutate(Group = 0)  # Control group
+  
+  
+  treatment_data_9224 <- data_combined_9224 %>% 
+    select(Date, c_target, Discharge, SO4, ph, NO3, ppt..mm., tmean..degrees.C., Basalt) %>%
+    mutate(Group = 1)  # Treatment group
+  
+  control_data_9224 <- data_combined_9224 %>% 
+    select(Date, c_target = conc_W9, Discharge = Qdaily, SO4, ph, NO3, ppt..mm., tmean..degrees.C., Basalt) %>%
+    mutate(Group = 0)  # Control group
+  
+  
+
+  
+  # Assume Basalt application date
+  basalt_date <- as.Date("2023-07-01")
+  
+  ########################## Create a did frame for the model #####################
+  # Create did data frame
+  data_did      <- rbind(treatment_data, control_data)
+  data_did2     <- rbind(treatment_data2, control_data2)
+  data_did_9224 <- rbind(treatment_data_9224, control_data_9224)
+  
+  # Create a new variable for days after basalt application
+  data_did <- data_did %>%
+    mutate(days_after_basalt = as.numeric(difftime(Date, basalt_date, units = "days"))) 
+  
+  data_did2 <- data_did2 %>%
+    mutate(days_after_basalt = as.numeric(difftime(Date, basalt_date, units = "days"))) 
+  
+  data_did_9224 <- data_did_9224 %>%
+    mutate(days_after_basalt = as.numeric(difftime(Date, basalt_date, units = "days"))) 
+  
+  # Assume days after basalt is 0
+  data_did$days_after_basalt0      <- ifelse(data_did$Date < basalt_date, 0, as.numeric(data_did$Date - basalt_date))
+  data_did2$days_after_basalt0     <- ifelse(data_did2$Date < basalt_date, 0, as.numeric(data_did2$Date - basalt_date))
+  data_did_9224$days_after_basalt0 <- ifelse(data_did_9224$Date < basalt_date, 0, as.numeric(data_did_9224$Date - basalt_date))
+  
+  # Remove rows with NA values
+  data_did        <- na.omit(data_did)  
+  data_did$Group  <- as.factor(data_did$Group)
+  data_did$Prepost<- as.factor(data_did$Basalt)
+  data_did$Month  <- as.numeric(format(data_did$Date, "%m"))
+
+  data_did2        <- na.omit(data_did)  
+  data_did2$Group  <- as.factor(data_did$Group)
+  data_did2$Prepost<- as.factor(data_did$Basalt)
+  data_did2$Month  <- as.numeric(format(data_did$Date, "%m"))
+  
+  data_did_9224       <- na.omit(data_did_9224)  
+  data_did_9224$Group  <- as.factor(data_did_9224$Group)
+  data_did_9224$Prepost<- as.factor(data_did_9224$Basalt)
+  data_did_9224$Month  <- as.numeric(format(data_did_9224$Date, "%m"))
+  
+
+  table(data_did2$Group)  # Counts of treatment (1) and control (0) groups
+  
+  
+  
+  ################### Generate predicted values from the model##################
+  
+  
+  # New data from data_did (data points related to real measurements )
+  # Discharge is W2 q, Qdaily is W9 q, 
+  new_data        <- data_did[, c("Date", "Group","Discharge", "tmean..degrees.C.", "c_target","days_after_basalt0","days_after_basalt",  "Month", "ppt..mm.")]
+  new_data$Basalt <- 0;
+  new_data$Prepost<- as.factor(new_data$Basalt)
+  
+  new_data$days_after_basalt0 <- 0;
+  
+  # New data from daily estimated measurements
+  # 1. Left join all the database
+  data_w2_eList_daily <- eList_w2$Daily[, c("Date","Month","Q")]
+  
+  data_daily <- data_w2_all %>%
+    left_join(NTN_join,      by = "Date") %>%
+    left_join(prism_daily, by = "Date") %>%
+    left_join(W9_eList_conc_daily, by = "Date") %>%  # Limited data after Aug 2024
+    left_join(q_daily_w9,  by = "Date") %>%
+    left_join(data_w2_eList_daily, by = "Date")
+  
+  data_daily$Prepost <- ifelse(data_daily$Date >= as.Date("2023-07-01"), 1, 0)
+  
+  
+  new_data_daily_con <- data.frame(
+    Discharge         = data_daily$Q*35.315, # m3s to csf
+    Date              = data_daily$Date,
+    Month             = data_daily$Month,
+    ppt..mm.          = data_daily$ppt..mm.,
+    tmean..degrees.C. = data_daily$tdmean..degrees.C.,
+    ph                = data_daily$ph,
+    SO4               = data_daily$SO4,
+    NO3               = data_daily$NO3,
+    c_target          = data_daily$ConcDay,
+    Prepost           = as.factor(data_daily$Prepost),
+    Group             = as.factor(0)
+  )
+  
+  new_data_daily_tre <- new_data_daily_con
+  new_data_daily_tre$Group <- as.factor(1)
+  
+  
+  new_data_daily_did  <- rbind(new_data_daily_con, new_data_daily_tre)
+  
+  new_data_daily_did <- new_data_daily_did %>%
+    mutate(days_after_basalt = as.numeric(difftime(Date, basalt_date, units = "days"))) 
+  
+  new_data_daily_did$days_after_basalt0 <- ifelse(new_data_daily_did$Date < basalt_date, 0, as.numeric(new_data_daily_did$Date - basalt_date))
+  
+  # Group the daily data into 3-month time window
+  new_data_daily_did$prepost.3monthlag <- as.factor(ceiling(new_data_daily_did$days_after_basalt0/90))
+  
+  # Remove rows with NA values
+  new_data_daily_did        <- na.omit(new_data_daily_did)  
+  new_data_daily_did$Group  <- as.factor(new_data_daily_did$Group)
+  new_data_daily_did$Prepost<- as.factor(new_data_daily_did$Prepost)
+  new_data_daily_did_fake   <- new_data_daily_did
+  
+  new_data_daily_did_fake$Prepost            <- as.factor(0)
+  new_data_daily_did_fake$days_after_basalt0 <- 0
+  # Group the daily data into 3-month time window
+  new_data_daily_did_fake$prepost.3monthlag <- as.factor(ceiling(new_data_daily_did_fake$days_after_basalt0/90))
+  
+  
+  table(new_data_daily_did$Group)  # Counts of treatment (1) and control (0) groups
+  
+  
+  data_did$logq      <- log(data_did$Discharge)
+  data_did$logc      <- log(data_did$c_target)
+  data_did$date_num  <- as.numeric(data_did$Date)
+  data_did$dayofyear <- yday(data_did$Date)
+  
+  new_data$logq      <- log(new_data$Discharge)
+  new_data$date_num  <- as.numeric(new_data$Date)
+  new_data$dayofyear <- yday(new_data$Date)
+  
+  
+  ################### Generate predicted values from the model for 92 - 24 data
+  
+  
+  # New data from data_did (data points related to real measurements )
+  # Discharge is W2 q, Qdaily is W9 q, 
+  new_data_9224   <- data_did_9224[, c("Date", "Group","Discharge", "tmean..degrees.C.", "c_target","days_after_basalt0","days_after_basalt",  "Month", "ppt..mm.")]
+  new_data_9224$Basalt <- 0;
+  new_data_9224$Prepost<- as.factor(new_data_9224$Basalt)
+  
+  new_data_9224$days_after_basalt0 <- 0;
+  
+  # New data from daily estimated measurements
+  # 1. Left join all the database
+  data_w2_eList_daily <- eList_w2$Daily[, c("Date","Month","Q")]
+  
+  data_daily_9224 <- eList_w2$Sample %>%
+    select(Date, ConcAve) %>%  # Only keep Date and Conc
+    left_join(NTN_join,      by = "Date") %>%
+    left_join(prism_daily, by = "Date") %>%
+    left_join(W9_eList_conc_daily, by = "Date") %>%  # Limited data after Aug 2024
+    left_join(q_daily_w9,  by = "Date") %>%
+    left_join(data_w2_eList_daily, by = "Date")
+  
+  data_daily_9224$Prepost  <- ifelse(data_daily_9224$Date >= as.Date("2023-07-01"), 1, 0)
+  
+  
+  new_data_daily_con_9224 <- data.frame(
+    Discharge         = data_daily_9224$Q*35.315, # m3s to csf
+    Date              = data_daily_9224$Date,
+    Month             = data_daily_9224$Month,
+    ppt..mm.          = data_daily_9224$ppt..mm.,
+    tmean..degrees.C. = data_daily_9224$tdmean..degrees.C.,
+    ph                = data_daily_9224$ph,
+    SO4               = data_daily_9224$SO4,
+    NO3               = data_daily_9224$NO3,
+    c_target          = data_daily_9224$ConcDay,
+    Prepost           = as.factor(data_daily_9224$Prepost),
+    Group             = as.factor(0)
+  )
+  
+  new_data_daily_tre_9224 <- new_data_daily_con_9224
+  new_data_daily_tre_9224$Group <- as.factor(1)
+  
+  
+  new_data_daily_did_9224  <- rbind(new_data_daily_con_9224, new_data_daily_tre_9224)
+  
+  new_data_daily_did_9224 <- new_data_daily_did_9224 %>%
+    mutate(days_after_basalt = as.numeric(difftime(Date, basalt_date, units = "days"))) 
+  
+  new_data_daily_did_9224$days_after_basalt0 <- ifelse(new_data_daily_did_9224$Date < basalt_date, 0, as.numeric(new_data_daily_did$Date - basalt_date))
+  new_data_daily_did_9224$prepost.3monthlag <- as.factor(ceiling(new_data_daily_did_9224$days_after_basalt0/90))
+  
+  # Remove rows with NA values
+  new_data_daily_did_9224        <- na.omit(new_data_daily_did_9224)  
+  new_data_daily_did_9224$Group  <- as.factor(new_data_daily_did_9224$Group)
+  new_data_daily_did_9224$Prepost<- as.factor(new_data_daily_did_9224$Prepost)
+  new_data_daily_did_fake_9224   <- new_data_daily_did_9224
+  
+  new_data_daily_did_fake_9224$Prepost            <- as.factor(0)
+  new_data_daily_did_fake_9224$days_after_basalt0 <- 0
+  
+  
+  table(new_data_daily_did_9224$Group)  # Counts of treatment (1) and control (0) groups
+  
+  
+  data_did$logq      <- log(data_did$Discharge)
+  data_did$logc      <- log(data_did$c_target)
+  data_did$date_num  <- as.numeric(data_did$Date)
+  data_did$dayofyear <- yday(data_did$Date)
+  
+  new_data$logq      <- log(new_data$Discharge)
+  new_data$date_num  <- as.numeric(new_data$Date)
+  new_data$dayofyear <- yday(new_data$Date)
+  
+  data_did_9224$logq      <- log(data_did_9224$Discharge)
+  data_did_9224$logc      <- log(data_did_9224$c_target)
+  data_did_9224$date_num  <- as.numeric(data_did_9224$Date)
+  data_did_9224$dayofyear <- yday(data_did_9224$Date)
+  
+  new_data_9224$logq      <- log(new_data_9224$Discharge)
+  new_data_9224$date_num  <- as.numeric(new_data_9224$Date)
+  new_data_9224$dayofyear <- yday(new_data_9224$Date)
+  
+  new_data_daily_did$logq      <- log(new_data_daily_did$Discharge)
+  new_data_daily_did$date_num  <- as.numeric(new_data_daily_did$Date)
+  new_data_daily_did$dayofyear <- yday(new_data_daily_did$Date)
+  
+  
+  new_data_daily_did_fake$logq      <- log(new_data_daily_did_fake$Discharge)
+  new_data_daily_did_fake$date_num  <- as.numeric(new_data_daily_did_fake$Date)
+  new_data_daily_did_fake$dayofyear <- yday(new_data_daily_did_fake$Date)
+  
+  new_data_daily_did_9224$logq      <- log(new_data_daily_did_9224$Discharge)
+  new_data_daily_did_9224$date_num  <- as.numeric(new_data_daily_did_9224$Date)
+  new_data_daily_did_9224$dayofyear <- yday(new_data_daily_did_9224$Date)
+  
+  new_data_daily_did_fake_9224$logq      <- log(new_data_daily_did_fake_9224$Discharge)
+  new_data_daily_did_fake_9224$date_num  <- as.numeric(new_data_daily_did_fake_9224$Date)
+  new_data_daily_did_fake_9224$dayofyear <- yday(new_data_daily_did_fake_9224$Date)
+  
+  return(list( data_did  = data_did,  new_data = new_data, 
+               data_did2 = data_did2, new_data_daily_did = new_data_daily_did, 
+               new_data_daily_did_fake = new_data_daily_did_fake,
+               data_did_9224 = data_did_9224, new_data_9224 = new_data_9224,
+               new_data_daily_did_9224 = new_data_daily_did_9224,
+               new_data_daily_did_fake_9224 = new_data_daily_did_fake_9224
+  ))
+  
+  
+  
+}

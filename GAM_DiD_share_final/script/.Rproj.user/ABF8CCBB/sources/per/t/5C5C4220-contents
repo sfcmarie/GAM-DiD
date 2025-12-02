@@ -1,0 +1,91 @@
+# Increase of Concentration after Basalt Application with Time
+
+
+filtered_data <- subset(data_obs_eList, 
+                        Date > as.Date("2023-07-01") & delta_c_elist > 0)
+
+
+
+Fig1_delta_alk<- ggplot() + 
+  # Observed points (must come first to appear first in legend)
+  geom_point(data = filtered_data, 
+             aes(x = Date, y = delta_c_elist, color = "Observed Increase"), 
+             size = 2, shape = 21, stroke = 1) +
+  
+  # Smooth loess with confidence ribbon
+  geom_smooth(data = filtered_data, 
+              aes(x = Date, y = delta_c_elist, color = "Estimated Increase", fill = "Estimated Increase"), 
+              method = "loess", 
+              span = 0.4,      
+              se = TRUE,       
+              linewidth = 1,
+              alpha = 0.2) +     
+  
+  # Vertical line for basalt application
+  geom_vline(xintercept = as.Date("2023-07-01"), 
+             linetype = "dotted", color = "black", linewidth = 0.8) +
+  
+  geom_hline(yintercept = 0,  linetype = "dashed", color = "grey") +
+  
+  # Annotation with arrow
+  annotate("text", 
+           x = as.Date("2023-07-01") + 100,  
+           y = max(filtered_data$delta_c_elist, na.rm = TRUE) * 0.95, 
+           label = "Basalt application", 
+           size = 6, family = "sans") +
+  annotate("segment", 
+           x = as.Date("2023-07-01") + 25,
+           xend = as.Date("2023-07-01"),
+           y = max(filtered_data$delta_c_elist, na.rm = TRUE) * 0.92,
+           yend = max(filtered_data$delta_c_elist, na.rm = TRUE) * 0.85,
+           arrow = arrow(length = unit(0.15, "inches")), 
+           color = "black", linewidth = 0.5) +
+  
+  # Color and fill scales
+  scale_color_manual(name = NULL,
+                     values = c("Observed Increase" = "#D55E00", 
+                                "Estimated Increase" = "#0072B2"),
+                     breaks = c("Observed Increase", "Estimated Increase")) +
+  scale_fill_manual(name = NULL,
+                    values = c("Estimated Increase" = "#0072B2")) +
+  
+  # Remove fill from legend (since it's redundant with color)
+  guides(fill = "none") +
+  
+  # Axis labels
+  labs(x = "Date", 
+       y = expression("Alkalinity Increase [µeq/L]")) +
+  
+  # Date axis formatting
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b\n%Y"
+  ) +
+  
+  theme_classic(base_size =18) +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 1),
+    axis.title = element_text(size = 18),
+    axis.text = element_text(size = 18),
+    legend.position = c(1, 1),  # Upper right (adjust values if needed)
+    legend.justification = c(1, 1),    # Anchors legend to top-right
+    legend.text = element_text(size = 15),
+    legend.background = element_rect(fill = "white", color = "grey80", linewidth = 0.3),
+    legend.spacing.x = unit(0.3, 'cm'),
+    plot.margin = margin(5, 15, 5, 5)  # Top, Right, Bottom, Left
+  )
+
+Fig1_delta_alk
+
+# Export with custom size and resolution
+ggsave(
+  filename = "D:/Work_Yale/R_Projects/GLM_ERW/figure_output/alkalinity_increase_plot.png",  # or .pdf/.tiff/.jpeg
+  plot = Fig1_delta_alk,
+  width = 8,      # Width in inches (adjust as needed)
+  height = 5,     # Height in inches
+  dpi = 600,      # Resolution (300-600 for publications)
+  units = "in",   # Units for width/height ("in", "cm", "mm")
+  device = "png"  # Format ("png", "pdf", "tiff", "jpeg")
+)
+
+getwd()  # Prints the current working directory path
