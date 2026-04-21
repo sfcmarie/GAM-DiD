@@ -1,53 +1,46 @@
 ##################### Data Input to run the functions and figures ##############
-# Change this section when change to different target element
-# Note: The Q in the database from WRTDS has the unit of m3s
+# Note: The Q in the database from WRTDS has the unit of m3s-1
 # script/03_GAM_model_run contains the main GAM-DiD model
 # Note: The data used here are partly generated data for model display, not from
 # real measurements
 
-#1. Load data
-source("script/01_glm_erw_load_data_250806.R")
+#0. Library
 
-#2. Run this function to clean the data
-source("script/02_glm_erw_data_clean_for_glm_0804.R")
 
-#3. Define  unites
-mg2t     <- 1/1e9 # Ca Mg Na
-mueql2ct <- 1/1e6*44/1e6 # Alk to CO2 t
-ppb2t    <- 1/1e12 # Si
-cfs2ls   <- 28.3168
-m3s2cfs  <- 35.31467
-w2km2    <- 0.0886 # basalt area in the north
+library(ggplot2)
+library(mgcv)    # Gam-DiD model
+library(dplyr)
+library(splines)
+library(effects)
+library(plotly)
+library(tidyr)
+library(zoo)
+library(dlnm)
+library(lubridate)
+library(effects)
+library(gratia)
+library(robustbase)
+library(ggpmisc)
 
-#4. Define data frame to store data
 
-max_delta_2024 <- list()
-df_flux_3m     <- list()
+#1. Load W2 streamwater alkalinity data
+
+data_w2_all        <- read.csv("data_input/W2_data_d_combined_250725.csv")
+data_w2_all$Date   <- as.Date(data_w2_all$Date , format = "%m/%d/%Y")
+
+#2. Load dataframe for the GAM-DiD analysis
+load("data_input/data_did_wrtds.RData")
 
 
 ################################## [Alk]  #######################################
 
-#5. Import data for the GAM-DiD model 
+#3. Import data for the GAM-DiD model 
 
-#A. Define units
-unifact     <- 1#  unit transfer from W9 to W2 Alk
-uni_w2_tran <- 1
-
-#B. Generalize eList data 
-eList_w2 <- eList_W2_Alk
-eList_w9 <- eList_W9_Alk
-
-
-#C. Pick the target element from W2 data for analysis
+# Pick the target element from W2 data for analysis
 data_w2_all$c_target  <- data_w2_all$Alk
-data_w2_2324$c_target <- data_w2_2324$Alk
 
 
-#D. Pick the target element from W9 data for analysis 
-data_w9_2019_24_avg$c_target <- data_w9_2019_24_avg$ANC.µeq.L
-data_w9_2019_24_unique$c_target <- data_w9_2019_24_unique$ANC.µeq.L
-
-# 6. GAM-DiD run:  script 03-GAM model to run GAM model
+# 4. GAM-DiD run: 
 
 #A. Output file names
 filename_csv = "data_output/gam_Alk.csv"  # save GAM results
@@ -56,27 +49,28 @@ filename_preobs <-  "figure/preobs_Alk.pdf"
 
 
 #B. Run script 03-GAM model to run each element
-source("script/03_GAM_model_run.R")
+# GAM-DiD model setup:
 
-#C. Results from the GAM model
-new_data_daily_did_Alk      <- new_data_daily_did # prediction with basalt application
-new_data_daily_did_fake_Alk <- new_data_daily_did_fake  # prediction without basalt application
+gam_did_2224_wrtds <- gam(  logc ~ 
+                              s(logq, k = 4) +   #  default k = 4; 
+                              s(ppt..mm., k = 4 ) +  #  default k = 4
+                              s(tmean..degrees.C., k = 4) +  #  default k = 4
+                              s(Month,  by= Group ) + #  default none;  
+                              Group +
+                              prepost.3monthlag +
+                              Group:prepost.3monthlag,
+                            data = data_did_wrtds[data_did_wrtds$prepost.3monthlag %in% c('-4','-3','-2','-1','0','1','2','3','4','5','6','7'),]
+                            
+)
 
-# unit identification
-unifact_Alk <- unifact
+sum_gam <- summary(gam_did_2224_wrtds)
+sum_gam
 
-#D. Get summary
-sum_Alk <- sum_gam
-
-#E. Post run data analysis
-source("script/04_post_GAM_analysis.R")
-
-# unit identification
-
-uni_fig <- 1
+# Create the plot
+gam_plot <- draw(gam_did_2224_wrtds)
 
 
-#7. Plot treatment-effect delta C %
+#5. Plot treatment-effect delta C %
 
 ylab_fig = expression(Delta *c ~ Alkalinity~"["~"%"~"]")
 filename_fig = "figure/deltac_per_Alk_treatment_effect.pdf"  # or .pdf/.tiff/.jpeg

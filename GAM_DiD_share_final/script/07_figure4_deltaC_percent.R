@@ -7,27 +7,6 @@ library(dplyr)
 
 
 
-# Plot the percentage difference calculate from delta C, works for old codes
-# ggplot() + 
-#    geom_point(data = data_treatment, 
-#              aes(x = Date, y = delta_c_est/predicted_c_target_gam, color = "Estimated"), size = 1) +
-#   
-#   scale_color_manual(values = c("Observed" = "blue", "Estimated" = "red", "eList" = "orange")) +
-#   labs(title = "Increase of Concentration after Basalt Application", 
-#        x = "Date", 
-#        y = expression(Delta * "c (µeq/L)"),
-#        color = "Legend") +
-#   scale_x_date(
-#     date_breaks = "3 month",
-#     date_labels = "%m/%Y"
-#   ) +
-#   theme_minimal() +
-#   theme(
-#     axis.text.x = element_text(angle = 45, hjust = 1)
-#   )
-# 
-# 
-
 ################################################################################
 ###################### Error bar plot from  GAM  ###############################
 
@@ -64,21 +43,6 @@ coef_data$c_per   <- 1/exp(coef_data$estimate) * (exp(coef_data$estimate) - 1) *
 coef_data$low_c   <- 1/exp(coef_data$estimate - 1.96 * coef_data$se) * (exp(coef_data$estimate - 1.96 * coef_data$se) -1) * 100  
 coef_data$up_c    <- 1/exp(coef_data$estimate + 1.96 * coef_data$se) * (exp(coef_data$estimate + 1.96 * coef_data$se) -1) * 100
 
-# Use another equation
-# This gives the relative increase over the counterfactual (no treatment) level.
-# coef_data$c_per2   <- (exp(coef_data$estimate) - 1) * 100  # (exp(beta) - 1) /(exp(beta)) relative increase over the counterfactual (no treatment) level.
-# coef_data$low_c2   <- 1/exp(coef_data$estimate - 1.96 * coef_data$se) * (exp(coef_data$estimate - 1.96 * coef_data$se) -1) * 100  
-# coef_data$up_c2    <- 1/exp(coef_data$estimate + 1.96 * coef_data$se) * (exp(coef_data$estimate + 1.96 * coef_data$se) -1) * 100
-
-
-
-ggplot() + 
-  geom_line (data = coef_data,
-             aes(x = lag, y = c_per), color = "black", linewidth = 0.5) +
-  geom_line (data = coef_data,
-             aes(x = lag, y = low_c), color = "black", linewidth = 0.5) +
-  geom_line (data = coef_data,
-             aes(x = lag, y = up_c), color = "black", linewidth = 0.5) 
 
 
 # 3. Create quarterly date labels starting from July 2023
