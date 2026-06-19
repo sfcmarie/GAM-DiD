@@ -59,7 +59,7 @@ gam_did_2224_wrtds <- gam(  logc ~
                               Group +
                               prepost.3monthlag +
                               Group:prepost.3monthlag,
-                            data = data_did_wrtds[data_did_wrtds$prepost.3monthlag %in% c('-4','-3','-2','-1','0','1','2','3','4','5','6','7'),]
+                             data = data_did_wrtds[data_did_wrtds$prepost.3monthlag %in% c('-4','-3','-2','-1','0','1','2','3','4','5','6','7'),]
                             
 )
 
@@ -75,5 +75,10 @@ gam_plot <- draw(gam_did_2224_wrtds)
 ylab_fig = expression(Delta *c ~ Alkalinity~"["~"%"~"]")
 filename_fig = "figure/deltac_per_Alk_treatment_effect.pdf"  # or .pdf/.tiff/.jpeg
 
+#  plot
 source("script/07_figure4_deltaC_percent.R")
+
+
+
+
 
