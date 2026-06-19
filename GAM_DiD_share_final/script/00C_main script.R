@@ -75,7 +75,7 @@ gam_plot <- draw(gam_did_2224_wrtds)
 ylab_fig = expression(Delta *c ~ Alkalinity~"["~"%"~"]")
 filename_fig = "figure/deltac_per_Alk_treatment_effect.pdf"  # or .pdf/.tiff/.jpeg
 
-#  plot
+#  plot for the GAM treatment effect
 source("script/07_figure4_deltaC_percent.R")
 
 
